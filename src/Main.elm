@@ -1,6 +1,7 @@
 module Main exposing (main)
 
 import Browser exposing (Document)
+import Browser.Events
 import Element exposing (..)
 import Element.Background as Background
 import Element.Font as Font
@@ -10,14 +11,14 @@ import Particle exposing (Particle)
 import Particle.System as System exposing (System)
 import Random exposing (Generator)
 import Random.Extra
-import Random.Float exposing (normal)
+import Random.Float
 import Svg exposing (Svg)
 import Svg.Attributes as SAttrs
 import Update.Pipeline
 import Validator exposing (Validator)
 
 
-main : Program Int Model Msg
+main : Program Flags Model Msg
 main =
     Browser.document
         { init = init
@@ -35,6 +36,7 @@ type alias Model =
     , dairy : Maybe Dairy
     , fireworks : System Firework
     , previousFoodColorIsGreen : Bool
+    , windowSize : { width : Int, height : Int }
     }
 
 
@@ -73,8 +75,15 @@ type FoodColor
     | Red
 
 
-init : Int -> ( Model, Cmd Msg )
-init initialSeed =
+type alias Flags =
+    { initialSeed : Int
+    , windowWidth : Float
+    , windowHeight : Float
+    }
+
+
+init : Flags -> ( Model, Cmd Msg )
+init { initialSeed, windowWidth, windowHeight } =
     ( { caloriesPerServing = "0"
       , gramsPerServing = "0"
       , isWholeGrain = False
@@ -82,6 +91,7 @@ init initialSeed =
       , dairy = Nothing
       , fireworks = System.init (Random.initialSeed initialSeed)
       , previousFoodColorIsGreen = False
+      , windowSize = { width = floor windowWidth, height = floor windowHeight }
       }
     , Cmd.none
     )
@@ -96,11 +106,15 @@ type Msg
     | ClearDairy
     | SetFoodStyle FoodStyle
     | ParticleMsg (System.Msg Firework)
+    | WindowResize Int Int
 
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    System.sub [] ParticleMsg model.fireworks
+    Sub.batch
+        [ System.sub [] ParticleMsg model.fireworks
+        , Browser.Events.onResize WindowResize
+        ]
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -129,6 +143,9 @@ update msg model =
 
         ParticleMsg inner ->
             { model | fireworks = System.update inner model.fireworks }
+
+        WindowResize w h ->
+            { model | windowSize = { width = w, height = h } }
     )
         |> triggerFireworks
         |> Update.Pipeline.save
@@ -153,8 +170,8 @@ triggerFireworks model =
                 System.burst
                     (Random.Extra.andThen3 fireworkAt
                         (Random.uniform FRed [ FGreen, FBlue ])
-                        (normal 300 100)
-                        (normal 300 100)
+                        (Random.Float.normal (toFloat model.windowSize.width / 2) 100)
+                        (Random.Float.normal (toFloat model.windowSize.height / 4) 100)
                     )
                     model.fireworks
 
@@ -182,8 +199,8 @@ fizzler : FColor -> Generator (Particle Firework)
 fizzler color =
     Particle.init (Random.constant (Fizzler color))
         |> Particle.withDirection (Random.map degrees (Random.float 0 360))
-        |> Particle.withSpeed (Random.map (clamp 0 200) (normal 100 100))
-        |> Particle.withLifetime (normal 1.25 0.1)
+        |> Particle.withSpeed (Random.map (clamp 0 200) (Random.Float.normal 100 100))
+        |> Particle.withLifetime (Random.Float.normal 1.25 0.1)
 
 
 calorieValidator : Validator { a | caloriesPerServing : String } String Int
@@ -216,7 +233,20 @@ view : Model -> Document Msg
 view model =
     { title = "Noom Colors"
     , body =
-        [ layout [ width fill, height fill ] (viewModel model) ]
+        [ layout
+            [ width fill
+            , height fill
+            , System.view fireworkView
+                [ Html.Attributes.style "width" (String.fromInt model.windowSize.width ++ "px")
+                , Html.Attributes.style "height" (String.fromInt model.windowSize.height ++ "px")
+                , Html.Attributes.style "background-color" "#BFBFBF"
+                ]
+                model.fireworks
+                |> html
+                |> behindContent
+            ]
+            (viewModel model)
+        ]
     }
 
 
@@ -236,14 +266,7 @@ viewModel model =
         , spacing 16
         , centerX
         ]
-        [ html <|
-            System.view fireworkView
-                [ Html.Attributes.style "width" "600px"
-                , Html.Attributes.style "height" "600px"
-                , Html.Attributes.style "background-color" "#0F0F0F"
-                ]
-                model.fireworks
-        , row
+        [ row
             [ spacing 16 ]
             [ Input.radio
                 [ spacing 8 ]

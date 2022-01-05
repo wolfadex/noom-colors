@@ -15,7 +15,13 @@
   <body>
     <script src="elm.js"></script>
     <script>
-      Elm.Main.init({ flags: Date.now() });
+      Elm.Main.init({
+        flags: {
+          initialSeed: Date.now(),
+          windowWidth: window.innerWidth,
+          windowHeight: window.innerHeight,
+        },
+      });
     </script>
   </body>
 </html>
