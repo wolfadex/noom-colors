@@ -5,11 +5,19 @@ import Element exposing (..)
 import Element.Background as Background
 import Element.Font as Font
 import Element.Input as Input
+import Html.Attributes
+import Particle exposing (Particle)
+import Particle.System as System exposing (System)
+import Random exposing (Generator)
+import Random.Extra
+import Random.Float exposing (normal)
+import Svg exposing (Svg)
+import Svg.Attributes as SAttrs
 import Update.Pipeline
 import Validator exposing (Validator)
 
 
-main : Program () Model Msg
+main : Program Int Model Msg
 main =
     Browser.document
         { init = init
@@ -25,7 +33,19 @@ type alias Model =
     , isWholeGrain : Bool
     , foodStyle : FoodStyle
     , dairy : Maybe Dairy
+    , fireworks : System Firework
+    , previousFoodColorIsGreen : Bool
     }
+
+
+type Firework
+    = Fizzler FColor
+
+
+type FColor
+    = FRed
+    | FGreen
+    | FBlue
 
 
 type FoodStyle
@@ -53,13 +73,15 @@ type FoodColor
     | Red
 
 
-init : () -> ( Model, Cmd Msg )
-init () =
+init : Int -> ( Model, Cmd Msg )
+init initialSeed =
     ( { caloriesPerServing = "0"
       , gramsPerServing = "0"
       , isWholeGrain = False
       , foodStyle = Solid
       , dairy = Nothing
+      , fireworks = System.init (Random.initialSeed initialSeed)
+      , previousFoodColorIsGreen = False
       }
     , Cmd.none
     )
@@ -73,37 +95,95 @@ type Msg
     | SetDairy Dairy
     | ClearDairy
     | SetFoodStyle FoodStyle
+    | ParticleMsg (System.Msg Firework)
 
 
 subscriptions : Model -> Sub Msg
-subscriptions _ =
-    Sub.none
+subscriptions model =
+    System.sub [] ParticleMsg model.fireworks
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    Update.Pipeline.save <|
-        case msg of
-            NoOp ->
-                model
+    (case msg of
+        NoOp ->
+            model
 
-            SetCaloriesPerServing caloriesPerServing ->
-                { model | caloriesPerServing = caloriesPerServing }
+        SetCaloriesPerServing caloriesPerServing ->
+            { model | caloriesPerServing = caloriesPerServing }
 
-            SetGramsPerServing gramsPerServing ->
-                { model | gramsPerServing = gramsPerServing }
+        SetGramsPerServing gramsPerServing ->
+            { model | gramsPerServing = gramsPerServing }
 
-            SetWholeGrain isWholeGrain ->
-                { model | isWholeGrain = isWholeGrain }
+        SetWholeGrain isWholeGrain ->
+            { model | isWholeGrain = isWholeGrain }
 
-            SetDairy dairyFat ->
-                { model | dairy = Just dairyFat }
+        SetDairy dairyFat ->
+            { model | dairy = Just dairyFat }
 
-            ClearDairy ->
-                { model | dairy = Nothing }
+        ClearDairy ->
+            { model | dairy = Nothing }
 
-            SetFoodStyle foodStyle ->
-                { model | foodStyle = foodStyle }
+        SetFoodStyle foodStyle ->
+            { model | foodStyle = foodStyle }
+
+        ParticleMsg inner ->
+            { model | fireworks = System.update inner model.fireworks }
+    )
+        |> triggerFireworks
+        |> Update.Pipeline.save
+
+
+triggerFireworks : Model -> Model
+triggerFireworks model =
+    let
+        thisFoodColorIsGreen : Bool
+        thisFoodColorIsGreen =
+            case calculateFoodColor model of
+                Just Green ->
+                    True
+
+                _ ->
+                    False
+    in
+    { model
+        | previousFoodColorIsGreen = thisFoodColorIsGreen
+        , fireworks =
+            if not model.previousFoodColorIsGreen && thisFoodColorIsGreen then
+                System.burst
+                    (Random.Extra.andThen3 fireworkAt
+                        (Random.uniform FRed [ FGreen, FBlue ])
+                        (normal 300 100)
+                        (normal 300 100)
+                    )
+                    model.fireworks
+
+            else
+                model.fireworks
+    }
+
+
+fireworkAt : FColor -> Float -> Float -> Generator (List (Particle Firework))
+fireworkAt color x y =
+    fizzler color
+        |> Particle.withLocation (Random.constant { x = x, y = y })
+        |> Particle.withGravity 50
+        |> Particle.withDrag
+            (\_ ->
+                { coefficient = 1
+                , density = 0.015
+                , area = 2
+                }
+            )
+        |> Random.list 150
+
+
+fizzler : FColor -> Generator (Particle Firework)
+fizzler color =
+    Particle.init (Random.constant (Fizzler color))
+        |> Particle.withDirection (Random.map degrees (Random.float 0 360))
+        |> Particle.withSpeed (Random.map (clamp 0 200) (normal 100 100))
+        |> Particle.withLifetime (normal 1.25 0.1)
 
 
 calorieValidator : Validator { a | caloriesPerServing : String } String Int
@@ -156,7 +236,14 @@ viewModel model =
         , spacing 16
         , centerX
         ]
-        [ row
+        [ html <|
+            System.view fireworkView
+                [ Html.Attributes.style "width" "600px"
+                , Html.Attributes.style "height" "600px"
+                , Html.Attributes.style "background-color" "#0F0F0F"
+                ]
+                model.fireworks
+        , row
             [ spacing 16 ]
             [ Input.radio
                 [ spacing 8 ]
@@ -248,7 +335,7 @@ viewModel model =
                         none
         , paragraph []
             [ text "Your food is: "
-            , case calculateFoodColor model caloriesResult gramResult of
+            , case calculateFoodColor model of
                 Nothing ->
                     text "Unknown"
 
@@ -271,6 +358,84 @@ viewModel model =
         ]
 
 
+fireworkView : Particle Firework -> Svg msg
+fireworkView particle =
+    case Particle.data particle of
+        Fizzler color ->
+            let
+                length =
+                    max 2 (Particle.speed particle / 15)
+
+                ( hue, saturation, luminance ) =
+                    toHsl color
+
+                maxLuminance =
+                    100
+
+                luminanceDelta =
+                    maxLuminance - luminance
+
+                lifetime =
+                    Particle.lifetimePercent particle
+
+                opacity =
+                    if lifetime < 0.1 then
+                        lifetime * 10
+
+                    else
+                        1
+            in
+            Svg.ellipse
+                [ -- location within the burst
+                  SAttrs.cx (String.fromFloat (length / 2))
+                , SAttrs.cy "0"
+
+                -- size, smeared by motion
+                , SAttrs.rx (String.fromFloat length)
+                , SAttrs.ry "2"
+                , SAttrs.transform ("rotate(" ++ String.fromFloat (Particle.directionDegrees particle) ++ ")")
+
+                -- color!
+                , SAttrs.opacity (String.fromFloat opacity)
+                , SAttrs.fill
+                    (hslString
+                        hue
+                        saturation
+                        (maxLuminance - luminanceDelta * (1 - lifetime))
+                    )
+                ]
+                []
+
+
+{-| Using the tango palette, but a little lighter. Original colors at
+-}
+toHsl : FColor -> ( Float, Float, Float )
+toHsl color =
+    case color of
+        FRed ->
+            -- scarlet red
+            ( 0, 86, 75 )
+
+        FGreen ->
+            -- chameleon
+            ( 90, 75, 75 )
+
+        FBlue ->
+            -- sky blue
+            ( 211, 49, 83 )
+
+
+hslString : Float -> Float -> Float -> String
+hslString hue saturation luminance =
+    "hsl("
+        ++ String.fromFloat hue
+        ++ ","
+        ++ String.fromFloat saturation
+        ++ "%,"
+        ++ String.fromFloat luminance
+        ++ "%)"
+
+
 foodColorToString : FoodColor -> String
 foodColorToString foodColor =
     case foodColor of
@@ -284,8 +449,8 @@ foodColorToString foodColor =
             "Red"
 
 
-calculateFoodColor : Model -> Result (List String) Int -> Result (List String) Int -> Maybe FoodColor
-calculateFoodColor model caloriesPerServingResult gramsPerServingResult =
+calculateFoodColor : Model -> Maybe FoodColor
+calculateFoodColor model =
     case model.dairy of
         Just NonFat ->
             Just Green
@@ -297,7 +462,7 @@ calculateFoodColor model caloriesPerServingResult gramsPerServingResult =
             Just Red
 
         Nothing ->
-            case ( caloriesPerServingResult, gramsPerServingResult ) of
+            case ( Validator.run calorieValidator model, Validator.run gramsValidator model ) of
                 ( Ok caloriesPerServing, Ok gramsPerServing ) ->
                     let
                         calorieDensity : Float
