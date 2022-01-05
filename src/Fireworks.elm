@@ -1,15 +1,15 @@
-module Fireworks exposing (..)
+module Fireworks exposing (Firework, Model, Msg, burst, init, subscriptions, update, view)
 
 import Browser.Events
 import Element exposing (..)
 import Html.Attributes
 import Particle exposing (Particle)
-import Particle.System as System exposing (System)
-import Random exposing (Generator, initialSeed)
+import Particle.System exposing (System)
+import Random exposing (Generator)
 import Random.Extra
 import Random.Float
 import Svg exposing (Svg)
-import Svg.Attributes as SAttrs
+import Svg.Attributes
 
 
 type alias Model =
@@ -19,18 +19,18 @@ type alias Model =
 
 
 type Firework
-    = Fizzler FColor
+    = Fizzler Color
 
 
-type FColor
-    = FRed
-    | FGreen
-    | FBlue
+type Color
+    = Red
+    | Green
+    | Blue
 
 
 init : { initialSeed : Random.Seed, windowWidth : Int, windowHeight : Int } -> Model
 init { initialSeed, windowWidth, windowHeight } =
-    { particles = System.init initialSeed
+    { particles = Particle.System.init initialSeed
     , windowSize = { width = windowWidth, height = windowHeight }
     }
 
@@ -38,13 +38,13 @@ init { initialSeed, windowWidth, windowHeight } =
 subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.batch
-        [ System.sub [] ParticleMsg model.particles
+        [ Particle.System.sub [] ParticleMsg model.particles
         , Browser.Events.onResize WindowResize
         ]
 
 
 type Msg
-    = ParticleMsg (System.Msg Firework)
+    = ParticleMsg (Particle.System.Msg Firework)
     | WindowResize Int Int
 
 
@@ -52,7 +52,7 @@ update : Msg -> Model -> Model
 update msg model =
     case msg of
         ParticleMsg inner ->
-            { model | particles = System.update inner model.particles }
+            { model | particles = Particle.System.update inner model.particles }
 
         WindowResize w h ->
             { model | windowSize = { width = w, height = h } }
@@ -62,9 +62,9 @@ burst : Model -> Model
 burst model =
     { model
         | particles =
-            System.burst
+            Particle.System.burst
                 (Random.Extra.andThen3 fireworkAt
-                    (Random.uniform FRed [ FGreen, FBlue ])
+                    (Random.uniform Red [ Green, Blue ])
                     (Random.Float.normal (toFloat model.windowSize.width / 2) 100)
                     (Random.Float.normal (toFloat model.windowSize.height / 4) 100)
                 )
@@ -72,7 +72,7 @@ burst model =
     }
 
 
-fireworkAt : FColor -> Float -> Float -> Generator (List (Particle Firework))
+fireworkAt : Color -> Float -> Float -> Generator (List (Particle Firework))
 fireworkAt color x y =
     fizzler color
         |> Particle.withLocation (Random.constant { x = x, y = y })
@@ -87,7 +87,7 @@ fireworkAt color x y =
         |> Random.list 150
 
 
-fizzler : FColor -> Generator (Particle Firework)
+fizzler : Color -> Generator (Particle Firework)
 fizzler color =
     Particle.init (Random.constant (Fizzler color))
         |> Particle.withDirection (Random.map degrees (Random.float 0 360))
@@ -97,7 +97,7 @@ fizzler color =
 
 view : Model -> Element msg
 view model =
-    System.view fireworkView
+    Particle.System.view fireworkView
         [ Html.Attributes.style "width" (String.fromInt model.windowSize.width ++ "px")
         , Html.Attributes.style "height" (String.fromInt model.windowSize.height ++ "px")
         , Html.Attributes.style "background-color" "#BFBFBF"
@@ -111,21 +111,26 @@ fireworkView particle =
     case Particle.data particle of
         Fizzler color ->
             let
+                length : Float
                 length =
                     max 2 (Particle.speed particle / 15)
 
                 ( hue, saturation, luminance ) =
                     toHsl color
 
+                maxLuminance : number
                 maxLuminance =
                     100
 
+                luminanceDelta : Float
                 luminanceDelta =
                     maxLuminance - luminance
 
+                lifetime : Float
                 lifetime =
                     Particle.lifetimePercent particle
 
+                opacity : Float
                 opacity =
                     if lifetime < 0.1 then
                         lifetime * 10
@@ -135,17 +140,17 @@ fireworkView particle =
             in
             Svg.ellipse
                 [ -- location within the burst
-                  SAttrs.cx (String.fromFloat (length / 2))
-                , SAttrs.cy "0"
+                  Svg.Attributes.cx (String.fromFloat (length / 2))
+                , Svg.Attributes.cy "0"
 
                 -- size, smeared by motion
-                , SAttrs.rx (String.fromFloat length)
-                , SAttrs.ry "2"
-                , SAttrs.transform ("rotate(" ++ String.fromFloat (Particle.directionDegrees particle) ++ ")")
+                , Svg.Attributes.rx (String.fromFloat length)
+                , Svg.Attributes.ry "2"
+                , Svg.Attributes.transform ("rotate(" ++ String.fromFloat (Particle.directionDegrees particle) ++ ")")
 
                 -- color!
-                , SAttrs.opacity (String.fromFloat opacity)
-                , SAttrs.fill
+                , Svg.Attributes.opacity (String.fromFloat opacity)
+                , Svg.Attributes.fill
                     (hslString
                         hue
                         saturation
@@ -157,18 +162,18 @@ fireworkView particle =
 
 {-| Using the tango palette, but a little lighter. Original colors at
 -}
-toHsl : FColor -> ( Float, Float, Float )
+toHsl : Color -> ( Float, Float, Float )
 toHsl color =
     case color of
-        FRed ->
+        Red ->
             -- scarlet red
             ( 0, 86, 75 )
 
-        FGreen ->
+        Green ->
             -- chameleon
             ( 90, 75, 75 )
 
-        FBlue ->
+        Blue ->
             -- sky blue
             ( 211, 49, 83 )
 

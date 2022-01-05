@@ -1,4 +1,4 @@
-module Main exposing (main)
+module Main exposing (Dairy, Flags, FoodStyle, Model, Msg, main)
 
 import Browser exposing (Document)
 import Element exposing (..)
@@ -6,7 +6,7 @@ import Element.Background as Background
 import Element.Font as Font
 import Element.Input as Input
 import Fireworks
-import Random exposing (initialSeed)
+import Random
 import Update.Pipeline
 import Validator exposing (Validator)
 
@@ -84,8 +84,7 @@ init { initialSeed, windowWidth, windowHeight } =
 
 
 type Msg
-    = NoOp
-    | SetCaloriesPerServing String
+    = SetCaloriesPerServing String
     | SetGramsPerServing String
     | SetWholeGrain Bool
     | SetDairy Dairy
@@ -102,9 +101,6 @@ subscriptions model =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     (case msg of
-        NoOp ->
-            model
-
         SetCaloriesPerServing caloriesPerServing ->
             { model | caloriesPerServing = caloriesPerServing }
 
@@ -196,15 +192,6 @@ view model =
 
 viewModel : Model -> Element Msg
 viewModel model =
-    let
-        caloriesResult : Result (List String) Int
-        caloriesResult =
-            Validator.run calorieValidator model
-
-        gramResult : Result (List String) Int
-        gramResult =
-            Validator.run gramsValidator model
-    in
     column
         [ padding 16
         , spacing 16
@@ -256,6 +243,11 @@ viewModel model =
                 none
 
             Nothing ->
+                let
+                    caloriesResult : Result (List String) Int
+                    caloriesResult =
+                        Validator.run calorieValidator model
+                in
                 column
                     []
                     [ Input.text
@@ -272,6 +264,11 @@ viewModel model =
                 none
 
             Nothing ->
+                let
+                    gramResult : Result (List String) Int
+                    gramResult =
+                        Validator.run gramsValidator model
+                in
                 column
                     []
                     [ Input.text
