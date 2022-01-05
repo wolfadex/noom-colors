@@ -1,19 +1,12 @@
 module Main exposing (main)
 
 import Browser exposing (Document)
-import Browser.Events
 import Element exposing (..)
 import Element.Background as Background
 import Element.Font as Font
 import Element.Input as Input
-import Html.Attributes
-import Particle exposing (Particle)
-import Particle.System as System exposing (System)
-import Random exposing (Generator)
-import Random.Extra
-import Random.Float
-import Svg exposing (Svg)
-import Svg.Attributes as SAttrs
+import Fireworks
+import Random exposing (initialSeed)
 import Update.Pipeline
 import Validator exposing (Validator)
 
@@ -34,20 +27,9 @@ type alias Model =
     , isWholeGrain : Bool
     , foodStyle : FoodStyle
     , dairy : Maybe Dairy
-    , fireworks : System Firework
     , previousFoodColorIsGreen : Bool
-    , windowSize : { width : Int, height : Int }
+    , fireworks : Fireworks.Model
     }
-
-
-type Firework
-    = Fizzler FColor
-
-
-type FColor
-    = FRed
-    | FGreen
-    | FBlue
 
 
 type FoodStyle
@@ -89,9 +71,13 @@ init { initialSeed, windowWidth, windowHeight } =
       , isWholeGrain = False
       , foodStyle = Solid
       , dairy = Nothing
-      , fireworks = System.init (Random.initialSeed initialSeed)
+      , fireworks =
+            Fireworks.init
+                { initialSeed = Random.initialSeed initialSeed
+                , windowWidth = floor windowWidth
+                , windowHeight = floor windowHeight
+                }
       , previousFoodColorIsGreen = False
-      , windowSize = { width = floor windowWidth, height = floor windowHeight }
       }
     , Cmd.none
     )
@@ -105,16 +91,12 @@ type Msg
     | SetDairy Dairy
     | ClearDairy
     | SetFoodStyle FoodStyle
-    | ParticleMsg (System.Msg Firework)
-    | WindowResize Int Int
+    | FireworksMessage Fireworks.Msg
 
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Sub.batch
-        [ System.sub [] ParticleMsg model.fireworks
-        , Browser.Events.onResize WindowResize
-        ]
+    Sub.map FireworksMessage (Fireworks.subscriptions model.fireworks)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -141,11 +123,8 @@ update msg model =
         SetFoodStyle foodStyle ->
             { model | foodStyle = foodStyle }
 
-        ParticleMsg inner ->
-            { model | fireworks = System.update inner model.fireworks }
-
-        WindowResize w h ->
-            { model | windowSize = { width = w, height = h } }
+        FireworksMessage message ->
+            { model | fireworks = Fireworks.update message model.fireworks }
     )
         |> triggerFireworks
         |> Update.Pipeline.save
@@ -167,40 +146,11 @@ triggerFireworks model =
         | previousFoodColorIsGreen = thisFoodColorIsGreen
         , fireworks =
             if not model.previousFoodColorIsGreen && thisFoodColorIsGreen then
-                System.burst
-                    (Random.Extra.andThen3 fireworkAt
-                        (Random.uniform FRed [ FGreen, FBlue ])
-                        (Random.Float.normal (toFloat model.windowSize.width / 2) 100)
-                        (Random.Float.normal (toFloat model.windowSize.height / 4) 100)
-                    )
-                    model.fireworks
+                Fireworks.burst model.fireworks
 
             else
                 model.fireworks
     }
-
-
-fireworkAt : FColor -> Float -> Float -> Generator (List (Particle Firework))
-fireworkAt color x y =
-    fizzler color
-        |> Particle.withLocation (Random.constant { x = x, y = y })
-        |> Particle.withGravity 50
-        |> Particle.withDrag
-            (\_ ->
-                { coefficient = 1
-                , density = 0.015
-                , area = 2
-                }
-            )
-        |> Random.list 150
-
-
-fizzler : FColor -> Generator (Particle Firework)
-fizzler color =
-    Particle.init (Random.constant (Fizzler color))
-        |> Particle.withDirection (Random.map degrees (Random.float 0 360))
-        |> Particle.withSpeed (Random.map (clamp 0 200) (Random.Float.normal 100 100))
-        |> Particle.withLifetime (Random.Float.normal 1.25 0.1)
 
 
 calorieValidator : Validator { a | caloriesPerServing : String } String Int
@@ -236,13 +186,7 @@ view model =
         [ layout
             [ width fill
             , height fill
-            , System.view fireworkView
-                [ Html.Attributes.style "width" (String.fromInt model.windowSize.width ++ "px")
-                , Html.Attributes.style "height" (String.fromInt model.windowSize.height ++ "px")
-                , Html.Attributes.style "background-color" "#BFBFBF"
-                ]
-                model.fireworks
-                |> html
+            , Fireworks.view model.fireworks
                 |> behindContent
             ]
             (viewModel model)
@@ -379,84 +323,6 @@ viewModel model =
                             ]
             ]
         ]
-
-
-fireworkView : Particle Firework -> Svg msg
-fireworkView particle =
-    case Particle.data particle of
-        Fizzler color ->
-            let
-                length =
-                    max 2 (Particle.speed particle / 15)
-
-                ( hue, saturation, luminance ) =
-                    toHsl color
-
-                maxLuminance =
-                    100
-
-                luminanceDelta =
-                    maxLuminance - luminance
-
-                lifetime =
-                    Particle.lifetimePercent particle
-
-                opacity =
-                    if lifetime < 0.1 then
-                        lifetime * 10
-
-                    else
-                        1
-            in
-            Svg.ellipse
-                [ -- location within the burst
-                  SAttrs.cx (String.fromFloat (length / 2))
-                , SAttrs.cy "0"
-
-                -- size, smeared by motion
-                , SAttrs.rx (String.fromFloat length)
-                , SAttrs.ry "2"
-                , SAttrs.transform ("rotate(" ++ String.fromFloat (Particle.directionDegrees particle) ++ ")")
-
-                -- color!
-                , SAttrs.opacity (String.fromFloat opacity)
-                , SAttrs.fill
-                    (hslString
-                        hue
-                        saturation
-                        (maxLuminance - luminanceDelta * (1 - lifetime))
-                    )
-                ]
-                []
-
-
-{-| Using the tango palette, but a little lighter. Original colors at
--}
-toHsl : FColor -> ( Float, Float, Float )
-toHsl color =
-    case color of
-        FRed ->
-            -- scarlet red
-            ( 0, 86, 75 )
-
-        FGreen ->
-            -- chameleon
-            ( 90, 75, 75 )
-
-        FBlue ->
-            -- sky blue
-            ( 211, 49, 83 )
-
-
-hslString : Float -> Float -> Float -> String
-hslString hue saturation luminance =
-    "hsl("
-        ++ String.fromFloat hue
-        ++ ","
-        ++ String.fromFloat saturation
-        ++ "%,"
-        ++ String.fromFloat luminance
-        ++ "%)"
 
 
 foodColorToString : FoodColor -> String
