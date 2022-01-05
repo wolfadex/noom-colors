@@ -4,7 +4,7 @@
   "description": "A simple calculator for Noom food colors",
   "scripts": {
     "dev": "elm-live src/Main.elm --start-page index-carl.html -- --output=elm.js",
-    "build": "elm make src/Main.elm --optimize --output=elm.js && node minify.js",
+    "build": "elm-review && elm make src/Main.elm --optimize --output=elm.js && node minify.js",
     "review": "elm-review --fix-all",
     "review-watch": "elm-review --fix --watch"
   },

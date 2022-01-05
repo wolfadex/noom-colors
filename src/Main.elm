@@ -228,13 +228,13 @@ viewModel model =
                     [ spacing 16 ]
                     { onChange = SetFoodStyle
                     , selected = Just model.foodStyle
-                    , label = Input.labelAbove [] (text "Food Style")
+                    , label = Input.labelAbove [] (text "Food: ")
                     , options =
                         [ Input.option Solid (text "Solid")
-                        , Input.option (Liquid RegularLiquid) (text "Liquid - Regular")
-                        , Input.option (Liquid Soda) (text "Liquid - Soda")
-                        , Input.option (Liquid ArtificialSweetners) (text "Liquid - Artificial Sweetners")
-                        , Input.option (Liquid Alcohol) (text "Liquid - Alcohol")
+                        , Input.option (Liquid Soda) (text "Soda")
+                        , Input.option (Liquid Alcohol) (text "Alcohol")
+                        , Input.option (Liquid ArtificialSweetners) (text "Liquid with Artificial Sweetners")
+                        , Input.option (Liquid RegularLiquid) (text "Other Liquid")
                         , Input.option Soup (text "Soup")
                         ]
                     }
@@ -252,7 +252,7 @@ viewModel model =
                     []
                     [ Input.text
                         []
-                        { label = Input.labelAbove [] (text "Calories per Serving")
+                        { label = Input.labelAbove [] (text "Calories per Serving:")
                         , placeholder = Nothing
                         , text = model.caloriesPerServing
                         , onChange = SetCaloriesPerServing
@@ -273,7 +273,7 @@ viewModel model =
                     []
                     [ Input.text
                         []
-                        { label = Input.labelAbove [] (text "Grams per Serving")
+                        { label = Input.labelAbove [] (text "Grams per Serving:")
                         , placeholder = Nothing
                         , text = model.gramsPerServing
                         , onChange = SetGramsPerServing
@@ -289,7 +289,7 @@ viewModel model =
                     Solid ->
                         Input.checkbox
                             []
-                            { label = Input.labelAbove [] (text "Is Whole Grain?")
+                            { label = Input.labelLeft [] (text "Is Whole Grain? ")
                             , icon = Input.defaultCheckbox
                             , checked = model.isWholeGrain
                             , onChange = SetWholeGrain
