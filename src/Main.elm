@@ -139,7 +139,12 @@ triggerFireworks model =
         | previousFoodColorIsGreen = thisFoodColorIsGreen
         , fireworks =
             if not model.previousFoodColorIsGreen && thisFoodColorIsGreen then
-                Fireworks.burst model.fireworks
+                model.fireworks
+                    |> Fireworks.burst
+                    |> Fireworks.burst
+                    |> Fireworks.burst
+                    |> Fireworks.burst
+                    |> Fireworks.burst
 
             else
                 model.fireworks
