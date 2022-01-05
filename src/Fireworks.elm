@@ -101,6 +101,8 @@ view model =
         [ Html.Attributes.style "width" (String.fromInt model.windowSize.width ++ "px")
         , Html.Attributes.style "height" (String.fromInt model.windowSize.height ++ "px")
         , Html.Attributes.style "background-color" "#BFBFBF"
+        , Html.Attributes.style "position" "fixed"
+        , Html.Attributes.style "top" "0"
         ]
         model.particles
         |> html

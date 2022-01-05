@@ -3,6 +3,7 @@ module Main exposing (Dairy, Flags, FoodStyle, Model, Msg, main)
 import Browser exposing (Document)
 import Element exposing (..)
 import Element.Background as Background
+import Element.Border as Border
 import Element.Font as Font
 import Element.Input as Input
 import Fireworks
@@ -24,7 +25,6 @@ main =
 type alias Model =
     { caloriesPerServing : String
     , gramsPerServing : String
-    , isWholeGrain : Bool
     , foodStyle : FoodStyle
     , dairy : Maybe Dairy
     , previousFoodColorIsGreen : Bool
@@ -33,9 +33,14 @@ type alias Model =
 
 
 type FoodStyle
-    = Solid
+    = Solid WholeGrain
     | Liquid LiquidType
     | Soup
+
+
+type WholeGrain
+    = WholeGrain
+    | NotWholeGrain
 
 
 type LiquidType
@@ -46,7 +51,8 @@ type LiquidType
 
 
 type Dairy
-    = NonFat
+    = NotDairy
+    | NonFat
     | LowFat
     | WholeFat
 
@@ -68,8 +74,7 @@ init : Flags -> ( Model, Cmd Msg )
 init { initialSeed, windowWidth, windowHeight } =
     ( { caloriesPerServing = "0"
       , gramsPerServing = "0"
-      , isWholeGrain = False
-      , foodStyle = Solid
+      , foodStyle = Solid NotWholeGrain
       , dairy = Nothing
       , fireworks =
             Fireworks.init
@@ -86,9 +91,7 @@ init { initialSeed, windowWidth, windowHeight } =
 type Msg
     = SetCaloriesPerServing String
     | SetGramsPerServing String
-    | SetWholeGrain Bool
     | SetDairy Dairy
-    | ClearDairy
     | SetFoodStyle FoodStyle
     | FireworksMessage Fireworks.Msg
 
@@ -107,14 +110,8 @@ update msg model =
         SetGramsPerServing gramsPerServing ->
             { model | gramsPerServing = gramsPerServing }
 
-        SetWholeGrain isWholeGrain ->
-            { model | isWholeGrain = isWholeGrain }
-
         SetDairy dairyFat ->
             { model | dairy = Just dairyFat }
-
-        ClearDairy ->
-            { model | dairy = Nothing }
 
         SetFoodStyle foodStyle ->
             { model | foodStyle = foodStyle }
@@ -197,129 +194,136 @@ viewModel model =
         , spacing 16
         , centerX
         ]
-        [ row
-            [ spacing 16 ]
-            [ Input.radio
-                [ spacing 8 ]
-                { onChange = SetDairy
-                , selected = model.dairy
-                , label = Input.labelLeft [] (text "Dairy Fat?: ")
-                , options =
-                    [ Input.option NonFat (text "Non-Fat")
-                    , Input.option LowFat (text "Low Fat")
-                    , Input.option WholeFat (text "Whole Fat")
-                    ]
-                }
-            , Input.button
-                [ paddingXY 16 8
-                , Background.color (rgb 0 1 0.8)
-                , centerY
-                ]
-                { label = text "Not Dairy"
-                , onPress = Just ClearDairy
-                }
-            ]
-        , case model.dairy of
-            Just _ ->
-                none
-
-            Nothing ->
-                Input.radio
-                    [ spacing 16 ]
-                    { onChange = SetFoodStyle
-                    , selected = Just model.foodStyle
-                    , label = Input.labelAbove [] (text "Food: ")
-                    , options =
-                        [ Input.option Solid (text "Solid")
-                        , Input.option (Liquid Soda) (text "Soda")
-                        , Input.option (Liquid Alcohol) (text "Alcohol")
-                        , Input.option (Liquid ArtificialSweetners) (text "Liquid with Artificial Sweetners")
-                        , Input.option (Liquid RegularLiquid) (text "Other Liquid")
-                        , Input.option Soup (text "Soup")
-                        ]
-                    }
-        , case model.dairy of
-            Just _ ->
-                none
-
-            Nothing ->
-                let
-                    caloriesResult : Result (List String) Int
-                    caloriesResult =
-                        Validator.run calorieValidator model
-                in
-                column
-                    []
-                    [ Input.text
-                        []
-                        { label = Input.labelAbove [] (text "Calories per Serving:")
-                        , placeholder = Nothing
-                        , text = model.caloriesPerServing
-                        , onChange = SetCaloriesPerServing
-                        }
-                    , viewErrors caloriesResult
-                    ]
-        , case model.dairy of
-            Just _ ->
-                none
-
-            Nothing ->
-                let
-                    gramResult : Result (List String) Int
-                    gramResult =
-                        Validator.run gramsValidator model
-                in
-                column
-                    []
-                    [ Input.text
-                        []
-                        { label = Input.labelAbove [] (text "Grams per Serving:")
-                        , placeholder = Nothing
-                        , text = model.gramsPerServing
-                        , onChange = SetGramsPerServing
-                        }
-                    , viewErrors gramResult
-                    ]
-        , case model.dairy of
-            Just _ ->
-                none
-
-            Nothing ->
-                case model.foodStyle of
-                    Solid ->
-                        Input.checkbox
-                            []
-                            { label = Input.labelLeft [] (text "Is Whole Grain? ")
-                            , icon = Input.defaultCheckbox
-                            , checked = model.isWholeGrain
-                            , onChange = SetWholeGrain
-                            }
-
-                    _ ->
-                        none
-        , paragraph []
+        [ paragraph []
             [ text "Your food is: "
             , case calculateFoodColor model of
                 Nothing ->
                     text "Unknown"
 
-                Just foodColor ->
-                    foodColorToString foodColor
+                Just color ->
+                    foodColorToString color
                         |> text
-                        |> el
-                            [ Font.color <|
-                                case foodColor of
-                                    Green ->
-                                        rgb 0 1 0
+                        |> el [ Font.color (foodColorToColor color) ]
+            ]
+        , dairySelection model.dairy
+        , case model.dairy of
+            Just NotDairy ->
+                viewNotDairy model
 
-                                    Yellow ->
-                                        rgb 1 1 0
+            _ ->
+                none
+        ]
 
-                                    Red ->
-                                        rgb 1 0 0
-                            ]
+
+foodColorToColor : FoodColor -> Color
+foodColorToColor color =
+    case color of
+        Red ->
+            rgb 1 0 0
+
+        Green ->
+            rgb 0 1 0
+
+        Yellow ->
+            rgb 1 1 0
+
+
+viewNotDairy : Model -> Element Msg
+viewNotDairy model =
+    column [ spacing 16 ]
+        [ Input.radio
+            [ spacing 16 ]
+            { onChange = SetFoodStyle
+            , selected = Just model.foodStyle
+            , label = Input.labelAbove [] (text "Food: ")
+            , options =
+                [ Input.option (Solid WholeGrain) (text "Solid with Whole Grain")
+                , Input.option (Solid NotWholeGrain) (text "Other Solid")
+                , Input.option (Liquid Soda) (text "Soda")
+                , Input.option (Liquid Alcohol) (text "Alcohol")
+                , Input.option (Liquid ArtificialSweetners) (text "Liquid with Artificial Sweetners")
+                , Input.option (Liquid RegularLiquid) (text "Other Liquid")
+                , Input.option Soup (text "Soup")
+                ]
+            }
+        , let
+            caloriesResult : Result (List String) Int
+            caloriesResult =
+                Validator.run calorieValidator model
+          in
+          column
+            []
+            [ Input.text
+                []
+                { label = Input.labelAbove [] (text "Calories per Serving:")
+                , placeholder = Nothing
+                , text = model.caloriesPerServing
+                , onChange = SetCaloriesPerServing
+                }
+            , viewErrors caloriesResult
+            ]
+        , let
+            gramResult : Result (List String) Int
+            gramResult =
+                Validator.run gramsValidator model
+          in
+          column
+            []
+            [ Input.text
+                []
+                { label = Input.labelAbove [] (text "Grams per Serving:")
+                , placeholder = Nothing
+                , text = model.gramsPerServing
+                , onChange = SetGramsPerServing
+                }
+            , viewErrors gramResult
             ]
         ]
+
+
+dairySelection : Maybe Dairy -> Element Msg
+dairySelection maybeDairy =
+    wrappedRow
+        [ spacing 16
+        , centerX
+        , width shrink
+        ]
+        [ Input.button
+            (buttonStyle (maybeDairy == Just NotDairy))
+            { label = text "Not Dairy"
+            , onPress = Just (SetDairy NotDairy)
+            }
+        , Input.button
+            (buttonStyle (maybeDairy == Just WholeFat))
+            { label = text "Dairy Whole Fat"
+            , onPress = Just (SetDairy WholeFat)
+            }
+        , Input.button
+            (buttonStyle (maybeDairy == Just LowFat))
+            { label = text "Dairy Low Fat"
+            , onPress = Just (SetDairy LowFat)
+            }
+        , Input.button
+            (buttonStyle (maybeDairy == Just NonFat))
+            { label = text "Dairy Non-Fat"
+            , onPress = Just (SetDairy NonFat)
+            }
+        ]
+
+
+buttonStyle : Bool -> List (Attribute msg)
+buttonStyle selected =
+    [ paddingXY 16 8
+    , Background.color (rgb 0 1 0.8)
+    , Border.solid
+    , Border.width 3
+    , Border.color <|
+        if selected then
+            rgb 0 0 1
+
+        else
+            rgb 0 1 0.8
+    ]
 
 
 foodColorToString : FoodColor -> String
@@ -347,7 +351,7 @@ calculateFoodColor model =
         Just WholeFat ->
             Just Red
 
-        Nothing ->
+        Just NotDairy ->
             case ( Validator.run calorieValidator model, Validator.run gramsValidator model ) of
                 ( Ok caloriesPerServing, Ok gramsPerServing ) ->
                     let
@@ -357,15 +361,15 @@ calculateFoodColor model =
                     in
                     Just <|
                         case model.foodStyle of
-                            Solid ->
-                                if model.isWholeGrain then
-                                    if calorieDensity < 2.4 then
-                                        Green
+                            Solid WholeGrain ->
+                                if calorieDensity < 2.4 then
+                                    Green
 
-                                    else
-                                        Yellow
+                                else
+                                    Yellow
 
-                                else if calorieDensity < 1.0 then
+                            Solid NotWholeGrain ->
+                                if calorieDensity < 1.0 then
                                     Green
 
                                 else if calorieDensity < 2.4 then
@@ -403,6 +407,9 @@ calculateFoodColor model =
 
                 _ ->
                     Nothing
+
+        Nothing ->
+            Nothing
 
 
 viewErrors : Result (List String) value -> Element msg
