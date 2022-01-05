@@ -5,7 +5,6 @@ import Element exposing (..)
 import Element.Background as Background
 import Element.Font as Font
 import Element.Input as Input
-import Html exposing (i)
 import Update.Pipeline
 import Validator exposing (Validator)
 
@@ -31,7 +30,7 @@ type alias Model =
 
 type FoodStyle
     = Solid
-    | Liquid
+    | Liquid LiquidType
     | Soup
 
 
@@ -159,7 +158,7 @@ viewModel model =
         ]
         [ row
             [ spacing 16 ]
-            [ Input.radioRow
+            [ Input.radio
                 [ spacing 8 ]
                 { onChange = SetDairy
                 , selected = model.dairy
@@ -184,14 +183,17 @@ viewModel model =
                 none
 
             Nothing ->
-                Input.radioRow
+                Input.radio
                     [ spacing 16 ]
                     { onChange = SetFoodStyle
                     , selected = Just model.foodStyle
                     , label = Input.labelAbove [] (text "Food Style")
                     , options =
                         [ Input.option Solid (text "Solid")
-                        , Input.option Liquid (text "Liquid")
+                        , Input.option (Liquid RegularLiquid) (text "Liquid - Regular")
+                        , Input.option (Liquid Soda) (text "Liquid - Soda")
+                        , Input.option (Liquid ArtificialSweetners) (text "Liquid - Artificial Sweetners")
+                        , Input.option (Liquid Alcohol) (text "Liquid - Alcohol")
                         , Input.option Soup (text "Soup")
                         ]
                     }
@@ -321,11 +323,18 @@ calculateFoodColor model caloriesPerServingResult gramsPerServingResult =
                                 else
                                     Red
 
-                            Liquid ->
+                            Liquid RegularLiquid ->
                                 if calorieDensity < 0.4 then
                                     Green
 
                                 else if calorieDensity < 0.5 then
+                                    Yellow
+
+                                else
+                                    Red
+
+                            Liquid _ ->
+                                if calorieDensity < 0.4 then
                                     Yellow
 
                                 else

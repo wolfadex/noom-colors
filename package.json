@@ -1,0 +1,25 @@
+{
+  "name": "noom-helper",
+  "version": "1.0.0",
+  "description": "A simple calculator for Noom food colors",
+  "scripts": {
+    "dev": "elm-live src/Main.elm --start-page index-carl.html -- --output=elm.js",
+    "build": "elm make src/Main.elm --optimize --output=elm.js && node minify.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wolfadex/noom-colors.git"
+  },
+  "author": "Wolfgang Schuster",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/wolfadex/noom-colors/issues"
+  },
+  "homepage": "https://wolfadex.github.io/noom-colors/",
+  "devDependencies": {
+    "elm": "^0.19.1-5",
+    "elm-format": "^0.8.5",
+    "elm-live": "^4.0.2",
+    "esbuild": "^0.14.10"
+  }
+}
