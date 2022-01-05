@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "description": "A simple calculator for Noom food colors",
   "scripts": {
-    "dev": "elm-live src/Main.elm --start-page index-carl.html -- --output=elm.js",
+    "dev": "run-p dev:**",
+    "dev:build": "nodemon --exec \"elm make src/Main.elm --output elm.js\" --watch src -e elm",
+    "dev:serve": "http-server .",
     "build": "elm-review && elm make src/Main.elm --optimize --output=elm.js && node minify.js",
     "review": "elm-review --fix-all",
     "review-watch": "elm-review --fix --watch"
@@ -21,8 +23,10 @@
   "devDependencies": {
     "elm": "^0.19.1-5",
     "elm-format": "^0.8.5",
-    "elm-live": "^4.0.2",
     "elm-review": "^2.7.0",
-    "esbuild": "^0.14.10"
+    "esbuild": "^0.14.10",
+    "http-server": "^14.0.0",
+    "nodemon": "^2.0.15",
+    "npm-run-all": "^4.1.5"
   }
 }
