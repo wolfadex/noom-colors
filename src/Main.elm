@@ -220,16 +220,37 @@ viewModel model =
         , spacing 16
         , centerX
         ]
-        [ paragraph []
-            [ text "Your food is: "
-            , case calculateFoodColor model of
-                Nothing ->
-                    text "Unknown"
+        [ let
+            maybeColor : Maybe FoodColor
+            maybeColor =
+                calculateFoodColor model
+          in
+          paragraph
+            [ width fill
+            , paddingXY 8 16
+            , Background.color <|
+                case maybeColor of
+                    Nothing ->
+                        rgb 1 1 1
 
-                Just color ->
-                    foodColorToString color
-                        |> text
-                        |> el [ Font.color (foodColorToColor color) ]
+                    Just color ->
+                        foodColorToColor color
+            , Font.color <|
+                case maybeColor of
+                    Just Red ->
+                        rgb 1 1 1
+
+                    _ ->
+                        rgb 0 0 0
+            ]
+            [ text "Your food is: "
+            , text <|
+                case maybeColor of
+                    Nothing ->
+                        "Unknown"
+
+                    Just color ->
+                        foodColorToString color
             ]
         , dairySelection model.dairy
         , case model.dairy of
